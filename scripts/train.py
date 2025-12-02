@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-import os
+import random
 
 # 총 30개의 명령
 # 0:이동, 1:회전, 2:제어, 3:조작, 4:센싱, 5:상태, 6:신호, 7:통신
@@ -28,12 +28,26 @@ class RobotActionEmbedder(nn.Module):
 
     def forward(self, input_id):
         vec = self.embedding(input_id)
-
-        out_category = self.classifier_category(vec)
-        out_identity = self.classifier_identity(vec)
+        noisy_vec = self.apply_distance_noise(vec)
+        out_category = self.classifier_category(noisy_vec)
+        out_identity = self.classifier_identity(noisy_vec)
         
         return vec, out_category, out_identity
-
+    
+    def apply_distance_noise(self, original_vector):
+        if self.training:
+            distance = random.uniform(1, 5)
+            r = max(float(distance), 1.0)
+            
+            attenuation_factor = 1.0 / (r ** 2)
+            weak_signal = original_vector * attenuation_factor
+            noise = torch.randn_like(original_vector)
+            received_vector = weak_signal + noise
+            
+            return received_vector
+        else:
+            return original_vector
+    
 NUM_ACTIONS = 30
 EMBEDDING_DIM = 328
 NUM_CATEGORIES = 8
@@ -41,6 +55,8 @@ NUM_CATEGORIES = 8
 model = RobotActionEmbedder(NUM_ACTIONS, EMBEDDING_DIM, NUM_CATEGORIES)
 criterion = nn.CrossEntropyLoss()
 optimizer = optim.Adam(model.parameters(), lr=0.05)
+
+model.train()
 
 print(f"--- 학습 시작 (Dimension: {EMBEDDING_DIM}) ---")
 
@@ -64,12 +80,13 @@ for epoch in range(150):
         print("최적 성능 도달, 학습을 중지함.")
         break
 
+model.eval()
 final_vectors = model.embedding.weight.data
 
 print(f"\n--- 벡터 형태 확인: {final_vectors.shape} ---") 
 
-torch.save(model.state_dict(), 'robot_action_model_328d.pth')
-print(">> 전체 모델 저장 완료: robot_action_model_328d.pth")
+torch.save(model.state_dict(), './data/robot_action_model_328d.pth')
+print(">> 전체 모델 저장 완료: ./data/robot_action_model_328d.pth")
 
-torch.save(final_vectors, 'robot_vectors_only_328d.pt')
-print(">> 벡터 데이터 저장 완료: robot_vectors_only_328d.pt")
+torch.save(final_vectors, './data/robot_vectors_only_328d.pt')
+print(">> 벡터 데이터 저장 완료: ./datarobot_vectors_only_328d.pt")
