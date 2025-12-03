@@ -77,3 +77,5 @@ $ bold(x)_("clean") = bold(x)_("rx") - "Net"(bold(x)_("rx")) $
 
 = 4. 결론 (Conclusion)
 본 프로젝트를 통해 물리적 거리 감쇠가 적용된 극한 환경에서도 딥러닝 기반의 필터링 기술(DAE)이 통신 거리를 늘릴 수 있음을 증명하였다. 향후 연구로는 *보다 희소성 있는 벡터 공간을 형성하기 위한 Triplet Loss*를 사용하여 성능을 극대화할 예정이다.
+
+해당 프로젝트는 https://github.com/kimknifestring/vector_communication-for-Extreme-situation 에서 확인해 볼 수 있다.
