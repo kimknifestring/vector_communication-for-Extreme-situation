@@ -1,6 +1,10 @@
 import torch
 import torch.nn.functional as F
+import torch.nn as nn
+import numpy as np
+from train_denoiser import ResidualDenoiser
 
+DENOISER_FILE = './data/denoiser_model.pth'
 VECTOR_FILE = './data/robot_vectors_only_328d.pt'
 
 CATEGORY_NAMES = {
@@ -27,11 +31,12 @@ def channel(signal_vector, distance_r):
     attenuation = 1.0 / (r ** 2)
     weak_signal = signal_vector * attenuation
 
-    noise = torch.rand_like(signal_vector)
+    noise = torch.randn_like(signal_vector)
     distorted_signal = weak_signal + noise
+    denoised_signal = denoiser(distorted_signal)
 
     print(f"[Channel] 거리 {r} 통과 중... (신호 강도 {attenuation * 100:.1f}% + 노이즈 혼합)")
-    return distorted_signal
+    return distorted_signal, denoised_signal
 
 def receiver(received_vector):
     similarities = F.cosine_similarity(received_vector.unsqueeze(0), REFERENCE_VECTORS)
@@ -51,9 +56,19 @@ except FileNotFoundError:
     print(f"!! [Error] '{VECTOR_FILE}' 파일이 없습니다.  train.py를 먼저 실행해주세요.")
     exit()
 
+try:
+    denoiser = ResidualDenoiser()
+    denoiser.load_state_dict(torch.load(DENOISER_FILE))
+    denoiser.eval()
+    print(">> [SYSTEM] DAE 모듈 불러오기 성공.")
+except FileNotFoundError:
+    print(f"!! [Error] '{DENOISER_FILE}' 파일이 없습니다.  train_denoiser.py를 먼저 실행해주세요.")
+    exit()
+
 if __name__ == "__main__":
+
     print("=" * 60)
-    print(" [Vector Communication Simulator] 가동됨")
+    print(" [짱 멋지고 정밀한 벡터 통신기] 가동됨")
     print("   - 사용법: [동작ID] [거리] 를 입력하세요.")
     print("   - 예시: '0 5' -> 0번 명령을 5(가상 단위) 거리에서 전송")
     print("   - 종료: 'q' 입력")
@@ -75,20 +90,24 @@ if __name__ == "__main__":
             distance = float(inputs[1])
 
             tx_signal = sender(target_id)
-            rx_signal = channel(tx_signal, distance)
-            decoded_id, decoded_cat, confidence = receiver(rx_signal)
+            rx_signal, dn_signal = channel(tx_signal, distance)
+            signal_list = (rx_signal, dn_signal)
 
-            is_success = (target_id == decoded_id)
-            
-            result_icon = "성공" if is_success else "실패"
-            
-            print("-" * 40)
-            print(f"1. 보낸 명령: {target_id}번")
-            print(f"2. 통신 환경: 거리 {distance} distance")
-            print(f"3. 수신기 해석: {decoded_id}번 ({decoded_cat})")
-            print(f"4. 확신 점수: {confidence:.4f} (0~1)")
-            print(f"5. 최종 판정: {result_icon}")
-            print("-" * 40)
+            for signal in range(2):
+                decoded_id, decoded_cat, confidence = receiver(signal_list[signal])
+
+                is_success = (target_id == decoded_id)
+
+                print("일반 수신" if signal == 0 else "DAE 수신")
+                result_icon = "성공" if is_success else "실패"
+                
+                print("-" * 40)
+                print(f"1. 보낸 명령: {target_id}번")
+                print(f"2. 통신 환경: 거리 {distance} distance")
+                print(f"3. 수신기 해석: {decoded_id}번 ({decoded_cat})")
+                print(f"4. 확신 점수: {confidence:.4f} (0~1)")
+                print(f"5. 최종 판정: {result_icon}")
+                print("-" * 40)
 
         except ValueError:
             print("!! [에러] 숫자를 정확히 입력해주세요.")
